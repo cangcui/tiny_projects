@@ -12,7 +12,7 @@ class BinaryAdder(object):
         self.max_binary_dim = 3
         self.batch_size = 5
         self.num_classes = 2
-        self.hidden_dim = self.max_binary_dim + 1
+        self.hidden_dim = self.max_binary_dim + 5
         self.total_series_length = 50000 * self.max_binary_dim * self.batch_size
         self.num_batches = self.total_series_length // self.batch_size // self.max_binary_dim
 
@@ -33,12 +33,14 @@ class BinaryAdder(object):
         # add a softmax layer
         weight = tf.Variable(tf.truncated_normal([self.hidden_dim, int(target.get_shape()[1])]))
         bias = tf.Variable(tf.constant(0.1, shape=[int(target.get_shape()[1])]))
+        # prediction is the shape[self.batch_size, self.hidden_dim]
         prediction = tf.nn.softmax(tf.matmul(last, weight) + bias)  # prediction tensor is the result
 
         # define the cost
-        # cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=target))
+        cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=target))
         # cost = tf.reduce_sum(tf.abs(target - tf.clip_by_value(prediction, 1e-10, 1.0)))
-        cost = tf.reduce_sum(tf.abs(target - prediction))
+        # cost = tf.reduce_mean(tf.abs(target - prediction))
+        # cost = -tf.reduce_sum(target * prediction)
 
         optimizer = tf.train.AdamOptimizer(learning_rate=0.01).minimize(cost)
 
@@ -56,7 +58,7 @@ class BinaryAdder(object):
             # 记录当前取到哪个数据
             ptr = 0
             display_batch = 1000
-            zs = [[0] for i in xrange(self.batch_size)]
+            zs = [[0] * (self.hidden_dim - self.max_binary_dim) for i in xrange(self.batch_size)]
             for j in xrange(self.num_batches):
                 x1 = xs1[ptr:(ptr + self.batch_size * self.max_binary_dim)]
                 x2 = xs2[ptr:(ptr + self.batch_size * self.max_binary_dim)]
