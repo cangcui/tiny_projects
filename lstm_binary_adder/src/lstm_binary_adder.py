@@ -8,8 +8,8 @@ from tensorflow.contrib import rnn
 
 class BinaryAdder(object):
     def __init__(self):
-        self.epochs = 1
-        self.max_binary_dim = 3
+        self.epochs = 1000
+        self.max_binary_dim = 7
         self.batch_size = 5
         self.num_classes = 2
         self.hidden_dim = self.max_binary_dim + 5
@@ -26,6 +26,7 @@ class BinaryAdder(object):
         data_seq = tf.unstack(data, num=self.hidden_dim, axis=1)
         # define the rnn
         cell = rnn.BasicLSTMCell(self.hidden_dim, state_is_tuple=True)
+        # cell = rnn.GRUCell(self.hidden_dim)
         # outputs should be the size of (batch_size, hidden_dim)
         outputs, states = rnn.static_rnn(cell, data_seq, dtype=tf.float32)
         last = outputs[-1]
@@ -34,17 +35,16 @@ class BinaryAdder(object):
         weight = tf.Variable(tf.truncated_normal([self.hidden_dim, int(target.get_shape()[1])]))
         bias = tf.Variable(tf.constant(0.1, shape=[int(target.get_shape()[1])]))
         # prediction is the shape[self.batch_size, self.hidden_dim]
-        prediction = tf.nn.softmax(tf.matmul(last, weight) + bias)  # prediction tensor is the result
+        prediction = tf.matmul(last, weight) + bias   # prediction tensor is the result
 
         # define the cost
-        cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=target))
+        # cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=target))
         # cost = tf.reduce_sum(tf.abs(target - tf.clip_by_value(prediction, 1e-10, 1.0)))
-        # cost = tf.reduce_mean(tf.abs(target - prediction))
-        # cost = -tf.reduce_sum(target * prediction)
+        cost = tf.reduce_mean(tf.abs(target - prediction))
 
         optimizer = tf.train.AdamOptimizer(learning_rate=0.01).minimize(cost)
 
-        pred_rounded = tf.round(prediction * 20) / 20.0
+        pred_rounded = tf.round(prediction)
         mistakes = tf.not_equal(target, pred_rounded)
         error = tf.reduce_mean(tf.cast(mistakes, tf.float32))
 
@@ -54,7 +54,7 @@ class BinaryAdder(object):
         sess.run(init_op)
         for i in xrange(self.epochs):
             print '*********epoch: %d**********' % i
-            xs1, xs2 = self.generateData()
+            xs1, xs2 = self.generateData(self.total_series_length)
             # 记录当前取到哪个数据
             ptr = 0
             display_batch = 1000
@@ -84,10 +84,29 @@ class BinaryAdder(object):
                 if j % display_batch == 0:
                     err = sess.run(error, feed_dict={data: xs, target: y})
                     print 'current batch: %d, err: %f' % (j, err)
+                    tx1, tx2 = self.generateData(self.max_binary_dim)
+                    ty = np.array([self.binArrAdder(tx1, tx2)])
+                    txs = self.plastic_input(tx1, tx2, [[0] * (self.hidden_dim - self.max_binary_dim)])
+                    print 'tx1: ', tx1, ', 10-base: ', self.binArrToBase10(tx1)
+                    print 'tx2: ', tx2, ', 10-base: ', self.binArrToBase10(tx2)
+                    print 'ty: ', ty, ', 10-base: ', self.binArrToBase10(ty[0])
+                    p = sess.run(pred_rounded, feed_dict={data: txs, target: ty})
+                    print 'pred: ', p, ', 10-base: ', self.binArrToBase10(p[0])
 
-    def generateData(self):
-        x1 = np.array(np.random.choice(2, self.total_series_length, p=[0.5, 0.5]))
-        x2 = np.array(np.random.choice(2, self.total_series_length, p=[0.5, 0.5]))
+    def plastic_input(self, x1, x2, zs):
+        x1 = np.array(x1.reshape([1, self.max_binary_dim]))
+        x2 = np.array(x2.reshape([1, self.max_binary_dim]))
+        x1 = np.concatenate((zs, x1), axis=1)
+        x2 = np.concatenate((zs, x2), axis=1)
+
+        x1 = x1.reshape([1, self.hidden_dim, 1])
+        x2 = x2.reshape([1, self.hidden_dim, 1])
+        return np.concatenate((x1, x2), axis=2)
+
+    def generateData(self, data_len):
+        assert data_len > 0
+        x1 = np.array(np.random.choice(2, data_len, p=[0.5, 0.5]))
+        x2 = np.array(np.random.choice(2, data_len, p=[0.5, 0.5]))
         return x1, x2
 
     def supplementZeros(self, binArr):
@@ -98,6 +117,10 @@ class BinaryAdder(object):
                 return [0 for i in xrange(self.hidden_dim - len(binArr))].extend(binArr)
         else:
             return None
+
+    def binArrToBase10(self, arr):
+        len_arr = len(arr)
+        return sum([arr[i] * (2 ** (len_arr - 1 - i)) for i in xrange(len_arr)])
 
     def binArrAdder(self, bin_seq_1, bin_seq_2):
         len_seq1 = len(bin_seq_1)
