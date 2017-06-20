@@ -85,6 +85,8 @@ class BinaryAdder(object):
                     err = sess.run(error, feed_dict={data: xs, target: y})
                     print 'current batch: %d, err: %f' % (j, err)
                     tx1, tx2 = self.generateData(self.max_binary_dim)
+                    # tx1 = np.array([1 for i in xrange(self.max_binary_dim)])
+                    # tx2 = np.array([1 for i in xrange(self.max_binary_dim)])
                     ty = np.array([self.binArrAdder(tx1, tx2)])
                     txs = self.plastic_input(tx1, tx2, [[0] * (self.hidden_dim - self.max_binary_dim)])
                     print 'tx1: ', tx1, ', 10-base: ', self.binArrToBase10(tx1)
