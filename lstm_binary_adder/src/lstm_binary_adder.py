@@ -16,6 +16,8 @@ class BinaryAdder(object):
         self.total_series_length = 50000 * self.max_binary_dim * self.batch_size
         self.num_batches = self.total_series_length // self.batch_size // self.max_binary_dim
 
+        self.is_little_endian = True
+
         assert self.hidden_dim >= self.max_binary_dim
 
     def run(self):
@@ -66,10 +68,15 @@ class BinaryAdder(object):
 
                 x1 = np.array(x1.reshape([self.batch_size, self.max_binary_dim]))
                 x2 = np.array(x2.reshape([self.batch_size, self.max_binary_dim]))
-                x1 = np.concatenate((zs, x1), axis=1)
-                x2 = np.concatenate((zs, x2), axis=1)
 
-                y = np.array([self.binArrAdder(x1[i], x2[i]) for i in xrange(self.batch_size)])
+                if self.is_little_endian:
+                    x1 = np.concatenate((x1, zs), axis=1)
+                    x2 = np.concatenate((x2, zs), axis=1)
+                    y = np.array([self.binArrAdderLittleEndian(x1[i], x2[i]) for i in xrange(self.batch_size)])
+                else:
+                    x1 = np.concatenate((zs, x1), axis=1)
+                    x2 = np.concatenate((zs, x2), axis=1)
+                    y = np.array([self.binArrAdder(x1[i], x2[i]) for i in xrange(self.batch_size)])
 
                 x1 = x1.reshape([self.batch_size, self.hidden_dim, 1])
                 x2 = x2.reshape([self.batch_size, self.hidden_dim, 1])
@@ -87,7 +94,10 @@ class BinaryAdder(object):
                     tx1, tx2 = self.generateData(self.max_binary_dim)
                     # tx1 = np.array([1 for i in xrange(self.max_binary_dim)])
                     # tx2 = np.array([1 for i in xrange(self.max_binary_dim)])
-                    ty = np.array([self.binArrAdder(tx1, tx2)])
+                    if self.is_little_endian:
+                        ty = np.array([self.binArrAdderLittleEndian(tx1, tx2)])
+                    else:
+                        ty = np.array([self.binArrAdder(tx1, tx2)])
                     txs = self.plastic_input(tx1, tx2, [[0] * (self.hidden_dim - self.max_binary_dim)])
                     print 'tx1: ', tx1, ', 10-base: ', self.binArrToBase10(tx1)
                     print 'tx2: ', tx2, ', 10-base: ', self.binArrToBase10(tx2)
@@ -98,8 +108,12 @@ class BinaryAdder(object):
     def plastic_input(self, x1, x2, zs):
         x1 = np.array(x1.reshape([1, self.max_binary_dim]))
         x2 = np.array(x2.reshape([1, self.max_binary_dim]))
-        x1 = np.concatenate((zs, x1), axis=1)
-        x2 = np.concatenate((zs, x2), axis=1)
+        if self.is_little_endian:
+            x1 = np.concatenate((x1, zs), axis=1)
+            x2 = np.concatenate((x2, zs), axis=1)
+        else:
+            x1 = np.concatenate((zs, x1), axis=1)
+            x2 = np.concatenate((zs, x2), axis=1)
 
         x1 = x1.reshape([1, self.hidden_dim, 1])
         x2 = x2.reshape([1, self.hidden_dim, 1])
@@ -111,20 +125,15 @@ class BinaryAdder(object):
         x2 = np.array(np.random.choice(2, data_len, p=[0.5, 0.5]))
         return x1, x2
 
-    def supplementZeros(self, binArr):
-        if isinstance(binArr, list):
-            if len(binArr) == self.hidden_dim:
-                return binArr
-            else:
-                return [0 for i in xrange(self.hidden_dim - len(binArr))].extend(binArr)
-        else:
-            return None
-
     def binArrToBase10(self, arr):
         len_arr = len(arr)
-        return sum([arr[i] * (2 ** (len_arr - 1 - i)) for i in xrange(len_arr)])
+        if self.is_little_endian:
+            return sum([arr[i] * (2 ** i) for i in xrange(len_arr)])
+        else:
+            return sum([arr[i] * (2 ** (len_arr - 1 - i)) for i in xrange(len_arr)])
 
     def binArrAdder(self, bin_seq_1, bin_seq_2):
+        # 低地址放高位(big endian)
         len_seq1 = len(bin_seq_1)
         len_seq2 = len(bin_seq_2)
         assert len_seq1 <= self.hidden_dim and len_seq2 <= self.hidden_dim
@@ -140,6 +149,23 @@ class BinaryAdder(object):
             final = [0 for i in xrange(self.hidden_dim - len(s_bin))]
             final.extend(s_bin)
             return np.array(final)
+
+    def binArrAdderLittleEndian(self, bin_seq_1, bin_seq_2):
+        # 低地址放低位(little endian)
+        len_seq1 = len(bin_seq_1)
+        len_seq2 = len(bin_seq_2)
+        assert len_seq1 <= self.hidden_dim and len_seq2 <= self.hidden_dim
+        uint_1 = sum([bin_seq_1[i] * (2 ** i) for i in xrange(len_seq1)])
+        uint_2 = sum([bin_seq_2[i] * (2 ** i) for i in xrange(len_seq2)])
+        s = bin(uint_1 + uint_2)
+        s_bin = [int(b) for b in s[2:]]
+        s_bin.reverse()
+        if len(s_bin) == self.hidden_dim:
+            return np.array(s_bin)
+        else:
+            supps = [0 for i in xrange(self.hidden_dim - len(s_bin))]
+            s_bin.extend(supps)
+            return np.array(s_bin)
 
 
 def main():
