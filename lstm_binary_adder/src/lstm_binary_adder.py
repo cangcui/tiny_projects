@@ -20,6 +20,8 @@ class BinaryAdder(object):
 
         assert self.hidden_dim >= self.max_binary_dim
 
+        tf.nn.conv2d()
+
     def run(self):
         os.putenv('CUDA_VISIBLE_DEVICES', '')
         data = tf.placeholder(tf.float32, [None, self.hidden_dim, 2])
