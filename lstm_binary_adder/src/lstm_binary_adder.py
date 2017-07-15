@@ -20,8 +20,6 @@ class BinaryAdder(object):
 
         assert self.hidden_dim >= self.max_binary_dim
 
-        tf.nn.conv2d()
-
     def run(self):
         os.putenv('CUDA_VISIBLE_DEVICES', '')
         data = tf.placeholder(tf.float32, [None, self.hidden_dim, 2])
@@ -44,7 +42,8 @@ class BinaryAdder(object):
         # define the cost
         # cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=target))
         # cost = tf.reduce_sum(tf.abs(target - tf.clip_by_value(prediction, 1e-10, 1.0)))
-        cost = tf.reduce_mean(tf.abs(target - prediction))
+        cost = tf.reduce_mean(tf.squared_difference(target, prediction))
+        # cost = tf.reduce_mean(tf.abs(target - prediction))
 
         optimizer = tf.train.AdamOptimizer(learning_rate=0.01).minimize(cost)
 
